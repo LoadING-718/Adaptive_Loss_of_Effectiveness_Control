@@ -1,0 +1,113 @@
+function [dx,u] = robot_dynamics(t,x,A,K,Ms,Gamma,Ma)
+
+global U_LOG U_REAL_LOG T_LOG
+
+%% Estados
+q  = x(1:2);
+dq = x(3:4);
+theta_hat = x(5:14);
+
+q1=q(1); q2=q(2);
+dq1=dq(1); dq2=dq(2);
+
+%% =============================
+%% Desired trajectory
+  
+[qd,dqd,ddqd] = desired_trajectory(t);
+
+%% =============================
+%% Loss of effectiveness function. Picewise continuous  
+%d1 = (t < 50) + 0.2*(t >= 50 && t < 500) + 1.0*(t >= 500);
+d1 = (t < 50) + 0.5*(t >= 50 & t < 200) + 1.0*(t >= 200);
+%d1 = 1;
+%d2 = 1;
+
+%d = diag([d1 d2]); 
+
+%% =============================
+%% Robot dynamics based on CISESE Dr. Rafael Kelly Robot
+
+D = zeros(2);
+D(1,1) = 2*0.01267*cos(q2)+0.32262;
+D(1,2) = 0.01218+0.01267*cos(q2);
+D(2,1) = D(1,2);
+D(2,2) = 0.01218;
+
+C = zeros(2);
+C(1,1) = -0.01267*sin(q2)*dq2;
+C(1,2) = -0.01267*sin(q2)*(dq1+dq2);
+C(2,1) = 0.01267*sin(q2)*dq1;
+
+%F = [0.274*dq1; 0.144*dq2];
+F = [2.288*dq1; 0.175*dq2];
+
+g = [(11.5078*sin(q1)+0.459587*sin(q1+q2));
+     (0.459587*sin(q1+q2))];
+ 
+%% =============================
+%% Modified reference model
+
+%q_bar = q - qd;
+
+dq_r = reference_model(q,qd,dqd,A);
+s = dq - dq_r;
+
+%% ============================= 
+%% Regressor matrix
+U = regressor_U(q,dq_r,ddqd);
+%% =============================
+%% Sigma(Ks) saturation
+
+%sat = @(x) max(min(x,1),-1);
+%sigma = Ms*sat(K*s);
+L = [0.9*Ms(1);0.9*Ms(2)];
+x = K*s;
+
+tau_p = (Ms - L).*tanh((x - L)./(Ms - L));
+tau_n = (Ms - L).*tanh((x + L)./(Ms - L));
+
+sigma = (tau_p + L).*(x > L) ...
+      + x.*((x >= -L) & (x <= L)) ...
+      + (tau_n - L).*(x < -L);
+
+%% =============================
+%% Control adaptable
+
+sa = Ma.*tanh(theta_hat);
+u_real = -sigma + U*sa;
+
+u(1) = max(min(u_real(1),150*d1),-150*d1);
+u(2) = max(min(u_real(2),15),-15);
+
+u = [u(1)*d1 ; u(2)];
+
+% if isempty(T_LOG) || abs(t - T_LOG(end)) > 1e-12
+%     U_REAL_LOG(:,end+1) = u_real;
+%     U_LOG(:,end+1) = u;
+%     T_LOG(end+1) = t;
+% end
+
+U_REAL_LOG(:,end+1) = u_real;
+U_LOG(:,end+1) = u;
+T_LOG(end+1) = t;
+
+%% =============================
+%% Dinamica real
+
+RHS = u - C*dq - F - g;
+ddq = D \ RHS;
+
+%% =============================
+%% Ley de adaptacion
+
+theta_hat_dot = - Gamma * U' * s;
+
+%% =============================
+%% Vector derivada total
+
+dx = zeros(14,1);
+dx(1:2) = dq;
+dx(3:4) = ddq;
+dx(5:14) = theta_hat_dot;
+
+end
