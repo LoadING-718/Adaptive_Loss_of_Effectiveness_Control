@@ -1,0 +1,41 @@
+function y = int_Upsilon_square
+
+data=load('workspace.mat');
+x = data.x;
+%t_data = data.t;
+
+T = 5;        % La T de la ventana de integracion en la condicion de PE
+
+lambdas = [];
+time = [];
+
+for t = 0: 0.1: 1000           % limite superior de t i.e., 
+    tplusT = t + T;            % rango de tiempo para la grafica
+    
+    fun = @(t)myfun(t, x);
+      
+    psisq = integral(fun,t,tplusT, 'arrayvalued', true);
+
+        
+    % this is M(t) at time t
+    Moft = [ psisq(1,1) psisq(1,2) ;
+             psisq(2,1) psisq(2,2) ]; 
+    %---
+    
+    %eigen = roots(poly(Moft))';
+    eigen = eig(Moft).';
+    
+    lambdas = [lambdas; eigen];
+    time = [time; t];
+    
+end
+
+lambdas_sorted = sort(lambdas, 2);
+
+figure;
+plot(time, lambdas_sorted(:,1), 'LineWidth', 1.5); %hold on;
+%plot(time, lambdas_sorted(:,2), 'LineWidth', 1.5);
+legend('\lambda_{min}');
+%legend('\lambda_{min}','\lambda_{max}');
+
+y = [lambdas];
