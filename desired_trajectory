@@ -1,4 +1,5 @@
 function [qd,dqd,ddqd] = desired_trajectory(t)
+% If the desired trajectory is chosen constant the algorithm acts as a Set-point control problem 
 % Desired trajectories
 
 w = 9*pi/8;
