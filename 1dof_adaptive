@@ -1,0 +1,113 @@
+"""
+Created on Sun Nov 16 22:19:53 2025
+
+@author: load
+
+ Implementa una simulación numérica de un sistema dinámico de segundo orden 
+ mediante una estrategia de control adaptativo.
+ El controlador busca que la posición del sistema siga una trayectoria, 
+ mientras se estima un parámetro variable del modelo.
+"""
+
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+
+# --- Parámetros ---
+k1 = 0.15
+k2 = 60.0
+a  = 2.5
+k3 = 500.0
+e  = 0.1
+
+# --- Valor real de theta
+def theta_real(t):
+    #return 9.8
+    return 9.8 * np.sin(2.0 * t)
+
+# --- Señal deseada q_d(t) ---
+def q_d(t):
+    #return np.pi/2
+    return np.sin(0.5 * t)
+
+def dq_d(t):
+    #return 0
+    return 0.5 * np.cos(0.5 * t)
+    
+def ddq_d(t):
+    #return 0
+    return - 0.25 * np.sin(0.5 * t)
+
+# --- Definir Upsilon ---
+def Upsilon(q, dq):
+    return np.cos(q)  
+
+# --- Dinámica del sistema ---
+def dynamics(t, x):
+    q, dq, theta_hat = x
+    ups = Upsilon(q, dq)
+
+    qd  = q_d(t)
+    dqd = dq_d(t)
+    theta = theta_real(t)    
+
+    q_bar = q - qd      # error de posición
+    dq_bar = dq - dqd   # error velocidad
+
+    # Ecuación de dinámica
+    ddq = (-k1 * dq_bar
+           - k2 * q_bar
+           + ups * theta 
+           - ups * theta_hat
+           - k3 * dq_bar * (ups ** 2) 
+           + ddq_d(t)
+           )
+
+    # Ley de adaptación
+    dtheta_hat =  a * ups * (dq + e*k2*q_bar)
+
+    return [dq, ddq, dtheta_hat]
+
+# --- Condiciones iniciales ---
+x0 = [-np.pi/4, 0.0, 0.0]   # q0, dq0, theta_hat0
+tf = 200.0
+
+# --- Simulación ---
+sol = solve_ivp(dynamics, [0, tf], x0, max_step=0.01, dense_output=True)
+
+t = sol.t
+q = sol.y[0]
+dq = sol.y[1]
+theta_hat = sol.y[2]
+
+# --- Cálculo del error q_bar ---
+qbar = q - q_d(t)
+
+# --- Error \theta - \hat\theta
+th_bar = theta_hat - theta_real(t)
+
+# --- Gráficas ---
+plt.figure(figsize=(10,5))
+#plt.plot(t, q, label="q")
+#plt.plot(t, q_d, '--', label="q_d")
+plt.plot(t, qbar, label="q_bar = q - q_d")
+plt.legend()
+plt.grid()
+plt.title("Error")
+plt.show()
+
+plt.figure(figsize=(10,5))
+plt.plot(t, theta_hat, label="theta_hat")
+#plt.axhline(theta_real, color='r', linestyle='--', label="theta real")
+plt.legend()
+plt.grid()
+plt.title("Parámetro estimado")
+plt.show()
+
+plt.figure(figsize=(10,5))
+plt.plot(t, th_bar, label="theta_hat")
+#plt.axhline(theta_real, color='r', linestyle='--', label="theta real")
+plt.legend()
+plt.grid()
+plt.title("Error parametros")
+plt.show()
